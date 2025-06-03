@@ -1,0 +1,6 @@
+# ninja log v6
+85	103	1746689157000448641	NeuralNetwork	e30163a58eeac05a
+0	17	7690785422583904	build.ninja	2debe12e8b42945b
+15	339	7696860224533058	CMakeFiles/NeuralNetwork.dir/main.c.obj	d45ba82f8120c5c1
+22	1191	7696860224605620	CMakeFiles/NeuralNetwork.dir/mnist_gui.c.obj	c036825c46d7c8a2
+1194	1686	7696860236329919	NeuralNetwork.exe	b803d3117e2d8f31

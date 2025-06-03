@@ -1,0 +1,3 @@
+neurons: 784,512,256,10
+learning_rate: 0.001
+regularization: 0.001

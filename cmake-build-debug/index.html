@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8"/>
+    <title>Распознавание цифр MNIST</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background: #fafafa;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px
+        }
+
+        #canvas {
+            border: 2px solid #333;
+            touch-action: none;
+            cursor: crosshair
+        }
+
+        #controls {
+            margin: 10px
+        }
+
+        #bars {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+            height: 120px;
+            align-items: flex-end
+        }
+
+        .bar {
+            width: 24px;
+            background: #2196f3;
+            transition: height .2s ease
+        }
+
+        .label {
+            text-align: center;
+            font-size: 14px;
+            margin-top: 2px
+        }
+    </style>
+</head>
+<body>
+<h2>Нарисуйте цифру</h2>
+<canvas id="canvas" width="280" height="280"></canvas>
+<div id="controls">
+    <button id="clear">Очистить</button>
+</div>
+<div id="bars"></div>
+<script>
+    const c = document.getElementById('canvas');
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.lineWidth = 20;
+    ctx.lineCap = 'round';
+    let draw = false;
+
+    function pos(e) {
+        const r = c.getBoundingClientRect();
+        return {x: e.clientX - r.left, y: e.clientY - r.top};
+    }
+
+    c.addEventListener('pointerdown', e => {
+        draw = true;
+        ctx.beginPath();
+        const p = pos(e);
+        ctx.moveTo(p.x, p.y);
+    });
+    c.addEventListener('pointermove', e => {
+        if (!draw) return;
+        const p = pos(e);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+    });
+    c.addEventListener('pointerup', () => {
+        draw = false;
+        predict();
+    });
+    c.addEventListener('pointerleave', () => draw = false);
+
+    document.getElementById('clear').onclick = () => {
+        ctx.clearRect(0, 0, c.width, c.height);
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(0, 0, c.width, c.height);
+        update([]);
+    };
+    const off = document.createElement('canvas');
+    off.width = off.height = 28;
+    const offCtx = off.getContext('2d');
+
+    function getInput() {
+        offCtx.fillStyle = '#fff';
+        offCtx.fillRect(0, 0, 28, 28);
+        offCtx.drawImage(c, 0, 0, 28, 28);
+        const d = offCtx.getImageData(0, 0, 28, 28).data;
+        const arr = [];
+        for (let i = 0; i < d.length; i += 4) {
+            arr.push(+(1 - d[i] / 255).toFixed(4));
+        }
+        return arr;
+    }
+
+    const bars = document.getElementById('bars');
+    for (let i = 0; i < 10; i++) {
+        const col = document.createElement('div');
+        col.style.display = 'flex';
+        col.style.flexDirection = 'column';
+        col.style.alignItems = 'center';
+        const bar = document.createElement('div');
+        bar.className = 'bar';
+        bar.id = 'b' + i;
+        const lab = document.createElement('div');
+        lab.className = 'label';
+        lab.textContent = i;
+        col.append(bar, lab);
+        bars.appendChild(col);
+    }
+
+    function update(p) {
+        for (let i = 0; i < 10; i++) {
+            document.getElementById('b' + i).style.height = ((p[i] || 0) * 120) + 'px';
+        }
+    }
+
+    function predict() {
+        fetch('/predict', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({image: getInput()})
+        }).then(r => r.json()).then(d => update(d.probs)).catch(console.error);
+    }
+</script>
+</body>
+</html>
