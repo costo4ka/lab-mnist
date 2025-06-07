@@ -23,15 +23,37 @@ typedef struct {
     int L, sizes[MAX_LAYERS]; // число слоев и массив размеров слоев
     Layer layer[MAX_LAYERS];
 } Net;
-// функция активации relu
+
+/**
+ * @brief  Функция активации ReLU.
+ *
+ * Возвращает вход, если он положителен, иначе 0.
+ *
+ * @param  x  входное значение
+ * @return double  `max(0, x)`
+ */
 static double relu(double x){ return x>0?x:0; }
 
+/**
+ * @brief  Softmax для последнего слоя.
+ *
+ * @param  z     вектор взвешенных сумм (длина n)
+ * @param  out   выходной массив вероятностей (длина n)
+ * @param  n     число классов
+ */
 static void softmax(const double*z,double*out,int n){
     double m=z[0]; for(int i=1;i<n;i++) if(z[i]>m) m=z[i];
     double s=0; for(int i=0;i<n;i++){ out[i]=exp(z[i]-m); s+=out[i]; }
     for(int i=0;i<n;i++) out[i]/=s;
 }
-// создаём новый слой: случайная инициализация весов (если prev != 0)
+
+/**
+ * @brief  Создаёт слой нейронов с ReLU-инициализацией Хе.
+ *
+ * @param  n     количество нейронов в создаваемом слое
+ * @param  prev  размер предыдущего слоя (0 — если входной)
+ * @return Layer полностью инициализированная структура Layer
+ */
 static Layer make_layer(int n,int prev){
     Layer L={.n=n};
     L.a=calloc(n,sizeof*L.a); L.b=calloc(n,sizeof*L.b);
@@ -42,13 +64,32 @@ static Layer make_layer(int n,int prev){
         for(int j=0;j<prev;j++) L.w[i][j]=sd*((double)rand()/RAND_MAX*2-1);
     } return L;
 }
-// собираем всю сеть
+
+
+/**
+ * @brief  Собирает полную сеть из массива размеров.
+ *
+ * @param  sizes массив размеров слоёв (длина L)
+ * @param  L     количество слоёв
+ * @return Net   инициализированная сеть
+ */
 static Net make_net(const int*sizes,int L){
     Net net={.L=L};
     for(int i=0;i<L;i++){ net.sizes[i]=sizes[i]; net.layer[i]=make_layer(sizes[i],i?sizes[i-1]:0); }
     return net;
 }
-// загружаем заранее обученные веса и смещения из файла
+
+/**
+ * @brief  Загружает обученные веса/смещения из `weights.txt`.
+ *
+ * Формат файла соответствует сохранённому из консольной версии.
+ *
+ * @param  net   уже сконструированная сеть (make_net)
+ * @param  file  путь к файлу весов
+ *
+ * @warning При несоответствии числа или размеров слоёв
+ *          функция завершает программу через MessageBox.
+ */
 static void load_weights(Net*net,const char*file){
     FILE*fp=fopen(file,"r");
     if(!fp){ MessageBoxA(NULL,"Не найден weights.txt","Error",MB_ICONERROR); exit(1);}
@@ -59,7 +100,14 @@ static void load_weights(Net*net,const char*file){
         int prev=net->sizes[l-1]; for(int i=0;i<c->n;i++)for(int j=0;j<prev;j++)fscanf(fp,"%lf",&c->w[i][j]);
     } fclose(fp);
 }
-// прямой проход
+
+/**
+ * @brief  Прямой проход по всей сети.
+ *
+ * @param  net   сеть
+ * @param  in    входное изображение 28×28, развёрнутое в вектор 784
+ * @param  out   массив для результатов softmax (длина OUTPUT_CLASSES)
+ */
 static void forward(Net*net,const double*in,double*out){
     memcpy(net->layer[0].a,in,net->sizes[0]*sizeof(double));
     for(int l=1;l<net->L;l++){
@@ -80,10 +128,14 @@ static POINT lastPt; // последняя точка при рисовании
 static double probs[OUTPUT_CLASSES]={0}; // вероятности для цифр 0–9
 static Net net;
 
-// переводим 280*280 в 28*28
-// полотно большого размера разбивается на 28*28 блоков по 10×10 пикселей
-// для каждого блока считается средняя «яркость»: рисуем чёрным по белому фону, результат будет отражать, насколько блок черный
-// получившееся число преобразуется в число от 0 до 1
+/**
+ * @brief  Пересчитывает вероятность цифр исходя из содержимого Canvas.
+ *
+ * 1. Преобразует 280×280 пикселей холста в 28×28 ячеек  
+ *    (усреднение яркости внутри каждой ячейки).  
+ * 2. Нормирует значения в диапазон [0;1].  
+ * 3. Запускает @ref forward() и кладёт результат в `probs`.
+ */
 static void infer(){
     double in[INPUT_SIZE];
     int stride=CANVAS*3; // 3 байта на пиксель
@@ -99,7 +151,13 @@ static void infer(){
     }
     forward(&net,in,probs);
 }
-// очищаем полотно в белый цвет и обновляем вывод
+
+/**
+ * @brief  Полностью очищает холст и сбрасывает предсказание.
+ *
+ * Заливает буфер белым, вызывает @ref infer() и
+ * инициирует перерисовку окна.
+ */
 static void clear_canvas(){
     // заливаем все белым
     memset(dibPix,255,CANVAS*CANVAS*3);
@@ -108,7 +166,13 @@ static void clear_canvas(){
     // просим windows перерисовать всё окно (TRUE — очистить фон полностью)
     InvalidateRect(NULL,NULL,TRUE);
 }
-// рисуем линию между двумя точками с заданной толщиной
+
+/**
+ * @brief  Рисует толстую (PEN_W) линию на DIB-холсте.
+ *
+ * @param  from  начальная точка (координаты в окне)
+ * @param  to    конечная точка
+ */
 static void draw_line(POINT from,POINT to){
     // cоздаём перо толщиной PEN_W и цветом RGB(0,0,0) (чёрное)
     HPEN hPen=CreatePen(PS_SOLID,PEN_W,RGB(0,0,0));
@@ -118,7 +182,21 @@ static void draw_line(POINT from,POINT to){
     SelectObject(hMemDC,old); DeleteObject(hPen);
 }
 
-// обработка сообщений окна
+/**
+ * @brief  Главная обработка сообщений Win32.
+ *
+ * Реагирует на:
+ * * создание окна — инициализация DIB-буфера;  
+ * * сообщения мыши — рисование и запуск @ref infer();  
+ * * правый клик или клавишу C — очистка полотна;  
+ * * WM_PAINT — отрисовка холста и панельки вероятностей.
+ *
+ * @param  h     дескриптор окна
+ * @param  msg   код сообщения
+ * @param  w     WPARAM
+ * @param  l     LPARAM
+ * @return LRESULT  стандартно для Win32
+ */
 static LRESULT CALLBACK WndProc(HWND h,UINT msg,WPARAM w,LPARAM l){
     switch(msg){
         case WM_CREATE:{
@@ -170,7 +248,17 @@ static LRESULT CALLBACK WndProc(HWND h,UINT msg,WPARAM w,LPARAM l){
     return 0;
 }
 
-// загрузка конфигурации, сетки, весов и запуск GUI
+/**
+ * @brief  Точка входа GUI-приложения.
+ *
+ * 1. Читает `config.txt`, строит сеть и подгружает веса  
+ *    (можно указать альтернативный файл через аргумент командной строки).  
+ * 2. Регистрирует класс окна и запускает цикл сообщений.  
+ * 3. Пользователь может рисовать цифры, а программа
+ *    в режиме реального времени выводит вероятности 0-9.
+ *
+ * @return int код завершения, ожидаемый Windows.
+ */
 int WINAPI WinMain(HINSTANCE hi,HINSTANCE,LPSTR cmd,int){
     /* читаем config.txt */
     int sizes[MAX_LAYERS],L=0; FILE*cf=fopen("config.txt","r");

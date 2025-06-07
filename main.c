@@ -64,8 +64,14 @@ typedef struct {
     double recall; // полнота (ложноотрицательные)
 } Metrics;
 
-// -------------------------- функция генерации случайных чисел -------------------------------
-
+/**
+ * @brief  Случайное число из распределения N(mean, stddev)
+ *
+ * @param  mean    
+математическое ожидание
+ * @param  stddev  среднеквадратичное отклонение
+ * @return double  сгенерированное значение
+ */
 double randn(double mean, double stddev) {
     double u1 = ((double) rand() + 1) / ((double) RAND_MAX + 1);
     double u2 = ((double) rand() + 1) / ((double) RAND_MAX + 1);
@@ -73,10 +79,20 @@ double randn(double mean, double stddev) {
     return z0 * stddev + mean;
 }
 
-// -------------------------- Функции чтения конфигурации -------------------------------
-// формат config.txt:
-// neurons: 784,128,64,10
-// читаем размер слоев, скорость обучения, коэффицент регуляризации(модуль во избежании переобучения)
+/**
+ * @brief  Чтение файла config.txt и заполнение параметров сети
+ *
+ * Формат файла:
+ *   neurons: 784,128,64,10
+ *   learning_rate: 0.001
+ *   regularization: 0.0005
+ *
+ * @param  filename        путь к config.txt
+ * @param  layerSizes[out] массив с размерами слоёв (выделяется внутри)
+ * @param  numLayers[out]  количество слоёв
+ * @param  learningRate[out] скорость обучения
+ * @param  regularization[out] коэффициент L2-регуляризации
+ */
 void readConfig(const char *filename, int **layerSizes, int *numLayers, double *learningRate, double *regularization) {
     FILE *fp = fopen(filename, "r");
     if (!fp) {
@@ -134,8 +150,13 @@ void softmax(double *z, double *output, int n) { // для выходного с
     }
 }
 
-// -------------------------- Инициализация сети -------------------------------
-
+/**
+ * @brief  Создаёт один слой нейросети со случайной инициализацией весов
+ *
+ * @param  numNeurons      количество нейронов в слое
+ * @param  prevNeurons     размер предыдущего слоя (0 для входного)
+ * @return Layer           полностью готовая структура Layer
+ */
 Layer createLayer(int numNeurons, int prevNeurons) {
     Layer layer;
     layer.numNeurons = numNeurons;
@@ -158,6 +179,15 @@ Layer createLayer(int numNeurons, int prevNeurons) {
     return layer;
 }
 
+/**
+ * @brief  Конструирует сеть из описания слоёв
+ *
+ * @param  layerSizes      массив размеров слоёв
+ * @param  numLayers       количество слоёв
+ * @param  learningRate    скорость обучения
+ * @param  regularization  коэффициент L2-регуляризации
+ * @return Network         полностью инициализированная сеть
+ */
 Network createNetwork(int *layerSizes, int numLayers, double learningRate, double regularization) {
     Network net;
     net.numLayers = numLayers;
@@ -173,6 +203,11 @@ Network createNetwork(int *layerSizes, int numLayers, double learningRate, doubl
     return net;
 }
 
+/**
+ * @brief  Освобождает всю связанную с сетью память
+ *
+ * @param  net  указатель на Network, созданный createNetwork()
+ */
 void freeNetwork(Network *net) {
     for (int i = 0; i < net->numLayers; i++) {
         free(net->layers[i].neurons);
@@ -192,8 +227,12 @@ void freeNetwork(Network *net) {
     free(net->layerSizes);
 }
 
-// -------------------------- Экспорт/импорт весов -------------------------------
-
+/**
+ * @brief  Сохраняет веса и гиперпараметры сети в текстовый файл
+ *
+ * @param  net       сеть
+ * @param  filename  куда сохранять
+ */
 void saveWeights(Network *net, const char *filename) {
     FILE *fp = fopen(filename, "w");
     if (!fp) {
@@ -224,6 +263,12 @@ void saveWeights(Network *net, const char *filename) {
     printf("Weights successfully saved to %s\n", filename);
 }
 
+/**
+ * @brief  Загружает веса и гиперпараметры из файла
+ *
+ * @param  net       уже созданная сеть (размеры должны совпадать)
+ * @param  filename  источник данных
+ */
 void loadWeights(Network *net, const char *filename) {
     FILE *fp = fopen(filename, "r");
     if (!fp) {
@@ -266,8 +311,12 @@ void loadWeights(Network *net, const char *filename) {
     printf("Весы успешно загружены из %s\n", filename);
 }
 
-// -------------------------- Прямой проход -------------------------------
-
+/**
+ * @brief  Прямое распространение по всем слоям сети
+ *
+ * @param  net    сеть
+ * @param  input  указатель на массив входных данных размера INPUT_SIZE
+ */
 void forwardPropagation(Network *net, double *input) {
     // копируем входные данные в «нейроны» первого слоя
     for (int i = 0; i < net->layerSizes[0]; i++) {
@@ -303,8 +352,12 @@ void forwardPropagation(Network *net, double *input) {
     }
 }
 
-// -------------------------- Обратное распространение -------------------------------
-
+/**
+ * @brief  Вычисляет локальные градиенты δ для всех слоёв
+ *
+ * @param  net     сеть (после forwardPropagation)
+ * @param  target  one-hot вектор истинной метки
+ */
 void computeDeltas(Network *net, double *target) {
     // вычисляем дельты на выходном слое:
     // delta = (предсказанная вероятность – истинная метка)
@@ -327,8 +380,14 @@ void computeDeltas(Network *net, double *target) {
     }
 }
 
-// -------------------------- Обновление весов -------------------------------
-
+/**
+ * @brief  Градиентный шаг: обновляет веса и смещения сети
+ *
+ * @param  net        сеть
+ * @param  gradW      накопленные градиенты весов   gradW[layer][i][j]
+ * @param  gradB      накопленные градиенты bias'ов gradB[layer][i]
+ * @param  batchSize  размер текущего мини-батча
+ */
 void updateWeights(Network *net, double ***gradW, double **gradB, int batchSize) {
     for (int l = 1; l < net->numLayers; l++) {
         Layer *curr = &net->layers[l];
@@ -342,8 +401,14 @@ void updateWeights(Network *net, double ***gradW, double **gradB, int batchSize)
     }
 }
 
-// -------------------------- Функция потерь -------------------------------
-
+/**
+ * @brief  Кросс-энтропия для одного примера
+ *
+ * @param  output  предсказанные вероятности softmax
+ * @param  target  one-hot истинная метка
+ * @param  n       длина векторов (OUTPUT_CLASSES)
+ * @return double  значение loss
+ */
 double computeLoss(double *output, double *target, int n) {
     double loss = 0;
     for (int i = 0; i < n; i++) {
@@ -352,8 +417,12 @@ double computeLoss(double *output, double *target, int n) {
     return loss;
 }
 
-// -------------------------- Шум для входных данных -------------------------------
-
+/**
+ * @brief  Добавляет шум в картинку
+ *
+ * @param  input  массив пикселей [0;1]
+ * @param  n      количество пикселей
+ */
 void addNoise(double *input, int n) {
     // сколько пикселей поменять
     int numNoisy = n * (5 + rand() % 6) / 100;
@@ -367,8 +436,15 @@ void addNoise(double *input, int n) {
     }
 }
 
-// -------------------------- Генерация синтетических данных -------------------------------
-
+/**
+ * @brief  Генерирует синтетический объект и one-hot метку
+ *
+ * Создаётся бинарное изображение 28×28 с шумом;
+ * случайный класс назначается целевой меткой.
+ *
+ * @param  input   массив для изображения (разм. INPUT_SIZE)
+ * @param  target  массив метки (разм. OUTPUT_CLASSES)
+ */
 void generateSyntheticData(double *input, double *target) {
     for (int i = 0; i < INPUT_SIZE; i++) {
         input[i] = rand() % 2;
@@ -391,6 +467,14 @@ int reverseInt(int i) {
     return ((int)c1 << 24) + ((int)c2 << 16) + ((int)c3 << 8) + c4;
 }
 
+/**
+ * @brief  Читает изображения из бинарного файла MNIST
+ *
+ * @param  filename          путь к файлу train-images-idx3-ubyte
+ * @param  numberOfImages[out] количество картинок
+ * @param  imageSize[out]      размер одной картинки (обычно 784)
+ * @return double**            массив изображений [N][imageSize], нормированный в [0;1]
+ */
 double **loadMNISTImages(const char *filename, int *numberOfImages, int *imageSize) {
     FILE *fp = fopen(filename, "rb");
     if(!fp) {
@@ -427,6 +511,13 @@ double **loadMNISTImages(const char *filename, int *numberOfImages, int *imageSi
     return images;
 }
 
+/**
+ * @brief  Читает метки из файла MNIST
+ *
+ * @param  filename            путь к train-labels-idx1-ubyte
+ * @param  numberOfLabels[out] количество меток
+ * @return unsigned char*      массив меток [N]
+ */
 unsigned char *loadMNISTLabels(const char *filename, int *numberOfLabels) {
     FILE *fp = fopen(filename, "rb");
     if(!fp) {
@@ -448,6 +539,14 @@ unsigned char *loadMNISTLabels(const char *filename, int *numberOfLabels) {
     return labels;
 }
 
+/**
+ * @brief  Комплексная загрузка датасета MNIST
+ *
+ * @param  imgFile    путь к файлу изображений
+ * @param  labelFile  путь к файлу меток
+ * @param  dataSize[out] число примеров
+ * @return TestCase*  массив структур TestCase [dataSize]
+ */
 TestCase* loadMNISTData(const char *imgFile, const char *labelFile, int *dataSize) {
     int numImages, imageSize;
     double **images = loadMNISTImages(imgFile, &numImages, &imageSize);
@@ -474,8 +573,14 @@ TestCase* loadMNISTData(const char *imgFile, const char *labelFile, int *dataSiz
     return data;
 }
 
-// -------------------------- Оценка модели и вычисление метрик -------------------------------
-
+/**
+ * @brief  Оценивает сеть и вычисляет усреднённые метрики
+ *
+ * @param  net       обученная сеть
+ * @param  data      массив примеров
+ * @param  dataSize  количество примеров
+ * @return Metrics   {loss, accuracy, precision, recall}
+ */
 Metrics evaluateModelMetrics(Network *net, TestCase *data, int dataSize) {
     // инициализируем метрики 0
     Metrics metrics = {0,0,0,0};
@@ -532,8 +637,18 @@ Metrics evaluateModelMetrics(Network *net, TestCase *data, int dataSize) {
     return metrics;
 }
 
-// -------------------------- Обучение мини-батчами с расширенной логикой -------------------------------
-
+/**
+ * @brief  Полный цикл обучения мини-батчами + ранняя остановка
+ *
+ * @param  net              сеть
+ * @param  trainData        обучающая выборка
+ * @param  trainSize        её объём
+ * @param  valData          валидационная выборка
+ * @param  valSize          её объём
+ * @param  epochs           максимальное число эпох
+ * @param  weightsFile      куда сохранять лучшие веса
+ * @param  lossHistoryFile  файл-лог для графика обучения
+ */
 void trainNetwork(Network *net, TestCase *trainData, int trainSize, TestCase *valData, int valSize, int epochs, const char *weightsFile, const char *lossHistoryFile) {
     // Создание накопителей градиентов
     double ***gradW = (double ***)malloc(net->numLayers * sizeof(double **));
@@ -659,8 +774,14 @@ printf("Training completed.\n");
 printf("Best result at epoch %d with loss %.6f\n", bestEpoch, bestLoss);
 }
 
-// -------------------------- Финальная проверка на нескольких примерах -------------------------------
-
+/**
+ * @brief  Выводит предсказания сети для нескольких примеров
+ *
+ * @param  net         обученная сеть
+ * @param  data        выборка
+ * @param  dataSize    её объём
+ * @param  numExamples сколько примеров напечатать
+ */
 void finalEvaluation(Network *net, TestCase *data, int dataSize, int numExamples) {
 printf("Final evaluation on %d examples:\n", numExamples);
 
@@ -675,8 +796,16 @@ printf("Final evaluation on %d examples:\n", numExamples);
     }
 }
 
-// -------------------------- Главная функция -------------------------------
 
+/**
+ * @brief  Точка входа программы
+ *
+ * Поддерживает режимы «train» и «test», выбор датасета
+ * (MNIST / синтетический), параметры через CLI.
+ *
+ * @note   Для прерывания обучения нажмите Ctrl-C —
+ *         сработает обработчик сигнала SIGINT.
+ */
 int main(int argc, char *argv[]) {
     // рвегистрируем обработчик SIGINT для ручной остановки обучения
     signal(SIGINT, handle_sigint);
